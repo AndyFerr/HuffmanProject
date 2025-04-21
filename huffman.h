@@ -1,11 +1,12 @@
 #ifndef HUFFMAN_H
 #define HUFFMAN_H
 
-#include <stdio.h>      // Para fopen, fread, fwrite, printf, etc
-#include <stdlib.h>     // Para malloc, free, realloc
-#include <string.h>     // Para strcmp, strcpy, strlen, etc
-#include <stdint.h>     // Para tipos como uint8_t (útil pra bits)
-#include <stdbool.h>    // Para usar `bool`, `true`, `false`
+#include <stdio.h>      // To fopen, fread, fwrite, printf, etc
+#include <stdlib.h>     // To malloc, free, realloc
+#include <string.h>     // To strcmp, strcpy, strlen, etc
+#include <stdint.h>     // To tipos como uint8_t (útil pra bits)
+#include <stdbool.h>    // To `bool`, `true`, `false`
+#include "pqueue_heap.h"
 
 
 
@@ -31,21 +32,43 @@ void bit_buffer_add(BitBuffer *buffer, int bit) {
 void write_buffer(FILE *f, BitBuffer *buffer) {
     if (buffer->bits_usados == 0) return;
 
-    // Completa com zeros os bits que faltam (à direita)
+    // Complete then missing bits at the right of the byte
     buffer->byte <<= (8 - buffer->bits_usados);
 
     fwrite(&buffer->byte, 1, 1, f);
 
-    // Zera o buffer
+    // clean the buffer
     buffer->byte = 0;
     buffer->bits_usados = 0;
 }
 
 
+PRIORITY_QUEUE* create_huffman_table(FILE *enter_file) {
+    int freq[256] = {0}; // Frequency of each character
+    unsigned char c;
 
-void compactor(FILE *entrada, FILE *saida, BitBuffer *buffer) {
+    // 1. Count the frequency of each character
+    while (fread(&c, 1, 1, enter_file) == 1) {
+        freq[c]++;
+    }
 
-    while (fread(&c, 1, 1, entrada) == 1) {
+    // 2. Creates the priority queue
+    PRIORITY_QUEUE* pq = create_queue();
+
+    // 3. Insert in the PQ only the values > 0
+    for (int i = 0; i < 256; i++) {
+        if (freq[i] > 0) {
+            insert(pq, i, freq[i]);
+        }
+    }
+
+    return pq;
+}
+
+
+void compactor(FILE *enter_file, FILE *saida, BitBuffer *buffer) {
+
+    while (fread(&c, 1, 1, enter_file) == 1) {
         char *codigo = tabela_huffman[c];
 
         for (int i = 0; codigo[i] != '\0'; i++) {
