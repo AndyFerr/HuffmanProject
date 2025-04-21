@@ -17,6 +17,8 @@ int main() {
 
     sprintf(new_file_name, "%s.huff", filename);
     
+
+    // Open the file to read and creates the new file
     FILE *original_file_ = fopen(filename, "rb");
     FILE *new_file = fopen(new_file_name, "wb");
     
