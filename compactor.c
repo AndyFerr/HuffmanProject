@@ -31,7 +31,12 @@ int main() {
     FILE *new_file = fopen(new_file_name, "wb");
     
 
-    PRIORITY_QUEUE* huff_table = create_huffman_table(original_file);
+    PRIORITY_QUEUE* huff_queue = create_queue(original_file);
+    NODE* root = build_huffman_tree(huff_queue);
+
+    char* huff_table[256] = {0};
+    char path[256];
+    create_huffman_table(root, path, 0, huff_table);
     
     unsigned char c;
     BitBuffer buffer;

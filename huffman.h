@@ -28,6 +28,7 @@ void bit_buffer_add(BitBuffer *buffer, int bit) {
     buffer->bits_usados++;
 }
 
+(c == '1')
 
 void write_buffer(FILE *f, BitBuffer *buffer) {
     if (buffer->bits_usados == 0) return;
@@ -42,13 +43,15 @@ void write_buffer(FILE *f, BitBuffer *buffer) {
     buffer->bits_usados = 0;
 }
 
-
-PRIORITY_QUEUE* create_huffman_table(FILE *enter_file) {
+/*
+    Creates the priority queue for each character
+*/
+PRIORITY_QUEUE* create_queue(FILE *input_file) {
     int freq[256] = {0}; // Frequency of each character
     unsigned char c;
 
     // 1. Count the frequency of each character
-    while (fread(&c, 1, 1, enter_file) == 1) {
+    while (fread(&c, 1, 1, input_file) == 1) {
         freq[c]++;
     }
 
@@ -65,24 +68,65 @@ PRIORITY_QUEUE* create_huffman_table(FILE *enter_file) {
     return pq;
 }
 
+/*
+    Creates the huffman tree
+*/
+NODE* build_huffman_tree(PRIORITY_QUEUE* pq) {
+    while (pq->size > 1) {
+        NODE* left = remove_lower(pq);
+        NODE* right = remove_lower(pq);
+        NODE* parent = create_node('\0', left->frequency + right->frequency, left, right);
+        insert(pq, parent->character, parent->frequency);
+    }
+    return remove_lower(pq); // return the roof tree
+}
 
-void compactor(FILE *enter_file, FILE *saida, BitBuffer *buffer) {
 
-    while (fread(&c, 1, 1, enter_file) == 1) {
-        char *codigo = tabela_huffman[c];
 
+void create_huffman_table(NODE* root, char* path, int depth, char* huff_table[256]) {
+    if (root == NULL) return;
+
+    if (root->left == NULL && root->right == NULL) {
+        path[depth] = '\0'; // Finalize the string
+        huff_table[root->character] = strdup(path); // Save the path in the table in the respective index
+        return;
+    }
+
+    // Goes to the left and adds 0 to thr path
+    path[depth] = '0';
+    create_huffman_table(root->left, path, depth + 1, huff_table);
+
+    // Goes to the right and adds 1 to thr path
+    path[depth] = '1';
+    create_huffman_table(root->right, path, depth + 1, huff_table);
+}
+
+
+
+
+void compactor(FILE *input_file, FILE *output_file, BitBuffer *buffer, char* huff_table[256]) {
+
+    while (fread(&c, 1, 1, input_file) == 1) {
+        char *codigo = huff_table[c];
+            "001010"
         for (int i = 0; codigo[i] != '\0'; i++) {
-            adiciona_bit_ao_buffer(&buffer, codigo[i] == '1');
+            adiciona_bit_ao_buffer(&buffer, codigo[i] == '1');'0'
 
             if (buffer->bits_usados == 8) {
-                write_buffer(saida, buffer);
+                write_buffer(output_file, buffer);
             }
         }
     }
 
     // Write the rest of the buffer if there's something lower than 8
-    write_buffer(saida, buffer);
+    write_buffer(output_file, buffer);
 }
 
 
 #endif // HUFFMAN_H
+
+
+
+
+
+
