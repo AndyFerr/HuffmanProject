@@ -14,39 +14,12 @@
     FUNCTIONS TO COMPACT THE FILE.
 */
 
-// BIT BUFFER TO STORE THE BITS UNTIL A BYTE IS FULL AND WRITE IT
-typedef struct {
-    unsigned char byte;  // Armazena os bits temporariamente
-    int bits_usados;     // De 0 a 7
-} BitBuffer;
 
-
-// FUNTION TO ADD A BIT TO THE BUFFER
-void bit_buffer_add(BitBuffer *buffer, int bit) {
-    buffer->byte <<= 1;             // move the bit to the left
-    buffer->byte |= (bit & 1);      // move the bit to the right
-    buffer->bits_usados++;
-}
-
-(c == '1')
-
-void write_buffer(FILE *f, BitBuffer *buffer) {
-    if (buffer->bits_usados == 0) return;
-
-    // Complete then missing bits at the right of the byte
-    buffer->byte <<= (8 - buffer->bits_usados);
-
-    fwrite(&buffer->byte, 1, 1, f);
-
-    // clean the buffer
-    buffer->byte = 0;
-    buffer->bits_usados = 0;
-}
 
 /*
     Creates the priority queue for each character
 */
-PRIORITY_QUEUE* create_queue(FILE *input_file) {
+void create_huff_queue(FILE *input_file, PRIORITY_QUEUE** pq1, PRIORITY_QUEUE** pq2) {
     int freq[256] = {0}; // Frequency of each character
     unsigned char c;
 
@@ -55,17 +28,13 @@ PRIORITY_QUEUE* create_queue(FILE *input_file) {
         freq[c]++;
     }
 
-    // 2. Creates the priority queue
-    PRIORITY_QUEUE* pq = create_queue();
-
-    // 3. Insert in the PQ only the values > 0
+    // 2. Insert in the PQ only the values > 0
     for (int i = 0; i < 256; i++) {
         if (freq[i] > 0) {
-            insert(pq, i, freq[i]);
+            insert(*pq1, i, freq[i]);
+            insert(*pq2, i, freq[i]);
         }
     }
-
-    return pq;
 }
 
 /*
@@ -80,7 +49,6 @@ NODE* build_huffman_tree(PRIORITY_QUEUE* pq) {
     }
     return remove_lower(pq); // return the roof tree
 }
-
 
 
 void create_huffman_table(NODE* root, char* path, int depth, char* huff_table[256]) {
@@ -102,24 +70,129 @@ void create_huffman_table(NODE* root, char* path, int depth, char* huff_table[25
 }
 
 
+/*
+    Calculate the amount of bits trashed at the end of the file by the huffman tree
+*/
+int calculate_bits_trashed(PRIORITY_QUEUE* pq, char* huff_table[256]) {
+    int bit_amount = 0;
+    while (pq->size > 0) {
+        NODE* left = remove_lower(pq);
+        if (left) {
+            bit_amount += left->frequency * strlen(huff_table[left->character]);
+        }
+
+        NODE* right = remove_lower(pq);
+        if (right) {
+            bit_amount += right->frequency * strlen(huff_table[right->character]);
+        }
+    }
+    return bit_amount;
+}
+
+int count_tree_size(NODE* root) {
+    if (root == NULL) return 0;
+    return count_tree_size(root->left) + count_tree_size(root->right) + 1;
+}
+
+int is_leaf(NODE* node) {
+    return node->left == NULL && node->right == NULL;
+}
+
+void write_header(PRIORITY_QUEUE* pq, char* huff_table[256], FILE *output_file, NODE* root) {
+    
+    /*
+        Calculate the amounts of trash bits at the end of the file
+        according to the huffman table
+    */
+    int amount_of_bits = calculate_bits_trashed(pq, huff_table);
+    int trash = ((8 - (amount_of_bits % 8)) % 8);
 
 
-void compactor(FILE *input_file, FILE *output_file, BitBuffer *buffer, char* huff_table[256]) {
+    // Calculates the size of the huffman tree
+    int tree_size = count_tree_size(root);
 
+
+    // Creates the header
+    unsigned short header = (trash << 13) | tree_size;
+
+    // Separates the two bytes
+    unsigned char byte1 = header >> 8;    // higher bits
+    unsigned char byte2 = header & 0xFF;  // lower bits
+
+    // Writes the header
+    fwrite(&byte1, 1, 1, output_file);
+    fwrite(&byte2, 1, 1, output_file);
+
+    /*
+        Writes the huffman tree in the required format
+    */
+    void write_tree(NODE* root, FILE* output_file) {
+        if (root != NULL) {
+            if (is_leaf(root)) {
+                fputc('*', output_file);
+                if (root->character == '*' || root->character == '\\') {
+                    fputc('\\', output_file); // escape
+                }
+                fputc(root->character, output_file);
+            } else {
+                fputc('*', output_file);
+            }
+            write_tree(root->left, output_file);
+            write_tree(root->right, output_file);
+        }
+    }
+}
+
+
+
+
+
+// BIT BUFFER TO STORE THE BITS UNTIL A BYTE IS FULL AND WRITE IT
+typedef struct {
+    unsigned char byte;  // Stores 8 bits temporarilya
+    int bits_used;     // 0 to 7
+} BitBuffer;
+
+
+// FUNTION TO ADD A BIT TO THE BUFFER
+void bit_buffer_add(BitBuffer *buffer, int bit) {
+    buffer->byte <<= 1;             // move the bit to the left
+    buffer->byte |= (bit & 1);      // move the bit to the right
+    buffer->bits_used++;
+}
+
+void write_buffer(FILE *f, BitBuffer *buffer) {
+    if (buffer->bits_used == 0) return;
+
+    // Complete then missing bits at the right of the byte
+    buffer->byte <<= (8 - buffer->bits_used);
+
+    fwrite(&buffer->byte, 1, 1, f);
+
+    // clean the buffer
+    buffer->byte = 0;
+    buffer->bits_used = 0;
+}
+
+void compactor(FILE *input_file, FILE *output_file, char* huff_table[256]) {
+
+    unsigned char c;
+    BitBuffer buffer = {0, 0};
+    
     while (fread(&c, 1, 1, input_file) == 1) {
         char *codigo = huff_table[c];
-            "001010"
+            
         for (int i = 0; codigo[i] != '\0'; i++) {
-            adiciona_bit_ao_buffer(&buffer, codigo[i] == '1');'0'
+            bit_buffer_add(&buffer, codigo[i] == '1');
 
-            if (buffer->bits_usados == 8) {
-                write_buffer(output_file, buffer);
+            if (buffer.bits_used == 8) {
+                write_buffer(output_file, &buffer);
             }
         }
     }
 
     // Write the rest of the buffer if there's something lower than 8
-    write_buffer(output_file, buffer);
+    write_buffer(output_file, &buffer);
 }
 
 

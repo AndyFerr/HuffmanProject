@@ -83,14 +83,14 @@ void heapify_down(PRIORITY_QUEUE* pq, int idx) {
 
     if (lower != idx) {
         swap(&pq->data[idx], &pq->data[lower]);
-        heapi   fy_down(pq, lower);
+        heapify_down(pq, lower);
     }
 }
 
 void insert(PRIORITY_QUEUE* pq, unsigned char c, int freq) {
     NODE* node = create_node(c, freq, NULL, NULL);
     pq->data[pq->size] = node;
-    heapfy_up(pq, pq->size);
+    heapify_up(pq, pq->size);
     pq->size++;
 }
 
@@ -100,9 +100,10 @@ NODE* remove_lower(PRIORITY_QUEUE* pq) {
     NODE* min = pq->data[0];
     pq->size--;
     pq->data[0] = pq->data[pq->size];
-    heapfy_down(pq, 0);
+    heapify_down(pq, 0);
     return min;
 }
 
 
 #endif // PQUEUE_HEAP_H
+
