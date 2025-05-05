@@ -105,5 +105,23 @@ NODE* remove_lower(PRIORITY_QUEUE* pq) {
 }
 
 
+void print_priority_queue(PRIORITY_QUEUE* pq) {
+    if (pq == NULL || pq->size == 0) {
+        printf("Fila vazia ou inexistente.\n");
+        return;
+    }
+
+    printf("Conteúdo da fila de prioridade:\n");
+    for (int i = 0; i < pq->size; i++) {
+        NODE* current = pq->data[i];
+        if (current->character >= 32 && current->character <= 126) {
+            printf("'%c' (%d): freq = %d\n", current->character, current->character, current->frequency);
+        } else {
+            printf("'\\x%02x' (%d): freq = %d\n", (unsigned char)current->character, current->character, current->frequency);
+        }
+    }
+}
+
+
 #endif // PQUEUE_HEAP_H
 

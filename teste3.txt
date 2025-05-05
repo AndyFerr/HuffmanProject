@@ -1,0 +1,1 @@
+Ola, esse é o primeiro teste do meu programa em C para ver se o huffman está compactando bem o arquivo.
