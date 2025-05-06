@@ -13,14 +13,17 @@ void create_huff_queue(FILE *input_file, PRIORITY_QUEUE** pq1, PRIORITY_QUEUE** 
     int freq[256] = {0};
     unsigned char c;
 
+    // Count character frequencies
     while (fread(&c, 1, 1, input_file) == 1) {
         freq[c]++;
     }
 
+    // Create nodes for characters with non-zero frequency and insert them into both queues
     for (int i = 0; i < 256; i++) {
         if (freq[i] > 0) {
-            insert(*pq1, i, freq[i]);
-            insert(*pq2, i, freq[i]);
+            NODE* node = create_node(i, freq[i], NULL, NULL);
+            insert(*pq1, node);
+            insert(*pq2, node);
         }
     }
 }
@@ -30,37 +33,45 @@ NODE* build_huffman_tree(PRIORITY_QUEUE* pq) {
     while (pq->size > 1) {
         NODE* left = remove_lower(pq);
         NODE* right = remove_lower(pq);
+
+        // Create a parent node with the left and right children
         NODE* parent = create_node('\0', left->frequency + right->frequency, left, right);
-        insert(pq, parent->character, parent->frequency);
+
+        // Insert the parent node back into the priority queue
+        insert(pq, parent);
     }
+
+    // The last remaining node is the root of the Huffman tree
     return remove_lower(pq);
 }
 
 // Gera a tabela de Huffman com os códigos binários dos caracteres
-void create_huffman_table(NODE* root, char* path, int depth, char* huff_table[256]) {
+typedef struct {
+    uint32_t code;
+    int length;
+} HuffmanCode;
+
+void create_huffman_table(NODE* root, uint32_t code, int depth, HuffmanCode huff_table[256]) {
     if (!root) return;
 
     if (!root->left && !root->right) {
-        path[depth] = '\0';
-        huff_table[root->character] = strdup(path);
+        huff_table[root->character].code = code;
+        huff_table[root->character].length = depth;
         return;
     }
 
-    path[depth] = '0';
-    create_huffman_table(root->left, path, depth + 1, huff_table);
-
-    path[depth] = '1';
-    create_huffman_table(root->right, path, depth + 1, huff_table);
+    create_huffman_table(root->left, (code << 1), depth + 1, huff_table);
+    create_huffman_table(root->right, (code << 1) | 1, depth + 1, huff_table);
 }
 
 // Calcula quantos bits totais serão escritos no corpo compactado
-int calculate_bits_trashed(PRIORITY_QUEUE* pq, char* huff_table[256]) {
+int calculate_bits_trashed(PRIORITY_QUEUE* pq, HuffmanCode huff_table[256]) {
     int bit_amount = 0;
 
     while (pq->size > 0) {
         NODE* node = remove_lower(pq);
-        if (node && huff_table[node->character]) {
-            bit_amount += node->frequency * strlen(huff_table[node->character]);
+        if (node && huff_table[node->character].length > 0) {
+            bit_amount += node->frequency * huff_table[node->character].length;
         }
     }
 
@@ -95,7 +106,7 @@ void write_tree(NODE* root, FILE* output_file) {
 }
 
 // Escreve o cabeçalho no novo arquivo (lixo, tamanho da árvore, árvore)
-void write_header(PRIORITY_QUEUE* pq, char* huff_table[256], FILE *output_file, NODE* root) {
+void write_header(PRIORITY_QUEUE* pq, HuffmanCode huff_table[256], FILE *output_file, NODE* root) {
 
     int total_bits = calculate_bits_trashed(pq, huff_table);
     int trash = ((8 - (total_bits % 8)) % 8);
@@ -117,53 +128,97 @@ typedef struct {
     int bits_used;
 } BitBuffer;
 
-void bit_buffer_add(BitBuffer *buffer, int bit) {
-    buffer->byte <<= 1;
-    buffer->byte |= (bit & 1);
-    buffer->bits_used++;
+void bit_buffer_add(BitBuffer *bit_buffer, int bit) {
+    bit_buffer->byte <<= 1;
+    bit_buffer->byte |= (bit & 1);
+    bit_buffer->bits_used++;
 }
 
-void write_buffer(FILE *f, BitBuffer *buffer) {
-    if (buffer->bits_used == 0) return;
+void write_buffer(FILE *f, BitBuffer *bit_buffer) {
+    if (bit_buffer->bits_used == 0) return;
 
-    buffer->byte <<= (8 - buffer->bits_used);
-    fwrite(&buffer->byte, 1, 1, f);
+    unsigned char temp_byte = bit_buffer->byte << (8 - bit_buffer->bits_used);
+    fwrite(&temp_byte, 1, 1, f);
 
-    buffer->byte = 0;
-    buffer->bits_used = 0;
+    bit_buffer->byte = 0;
+    bit_buffer->bits_used = 0;
 }
 
 // Escreve os dados compactados no novo arquivo
-void compactor(FILE *input_file, FILE *output_file, char* huff_table[256]) {
+void compactor(FILE *input_file, FILE *output_file, HuffmanCode huff_table[256]) {
     unsigned char c;
-    BitBuffer buffer = {0, 0};
+    BitBuffer bit_buffer = {0, 0}; // Initialize the bit buffer
 
+    // Read each character from the input file
     while (fread(&c, 1, 1, input_file) == 1) {
-        char *code = huff_table[c];
+        HuffmanCode code = huff_table[c];
 
-        // Verificação para evitar segmentation fault
-        if (code == NULL) continue;
+        // Skip characters with no Huffman code
+        //if (code.length == 0) continue;
 
-        for (int i = 0; code[i] != '\0'; i++) {
-            bit_buffer_add(&buffer, code[i] == '1');
-            if (buffer.bits_used == 8) {
-                write_buffer(output_file, &buffer);
+        // Add each bit of the Huffman code to the bit buffer
+        for (int i = code.length - 1; i >= 0; i--) {
+            bit_buffer_add(&bit_buffer, (code.code >> i) & 1);
+
+            // Write the buffer to the file when it is full
+            if (bit_buffer.bits_used == 8) {
+                write_buffer(output_file, &bit_buffer);
             }
         }
     }
 
-    // Escreve os últimos bits restantes
-    write_buffer(output_file, &buffer);
+    // Write any remaining bits in the buffer
+    write_buffer(output_file, &bit_buffer);
 }
+
+void free_huffman_tree(NODE* root) {
+    if (root == NULL) return;
+
+    free_huffman_tree(root->left);
+    free_huffman_tree(root->right);
+    free(root);
+}
+
 
 
 // Imprime a tabela de Huffman
-void print_huff_table(char* huff_table[256]) {
+void print_huff_table(HuffmanCode huff_table[256]) {
     for (int i = 0; i < 256; i++) {
-        if (huff_table[i]) {
-            printf("'%c' (%d): %s\n", i, i, huff_table[i]);
+        if (huff_table[i].length > 0) {
+            printf("'%c' (%d): Code: ", i, i);
+            for (int j = huff_table[i].length - 1; j >= 0; j--) {
+                printf("%d", (huff_table[i].code >> j) & 1);
+            }
+            printf(", Length: %d\n", huff_table[i].length);
         }
     }
 }
+
+void print_huffman_tree(NODE* root, int level) {
+    if (!root) return;
+
+    print_huffman_tree(root->right, level + 1);
+
+    for (int i = 0; i < level; i++) {
+        printf("    ");
+    }
+
+    if (root->left == NULL && root->right == NULL) {
+        // Nó folha: imprime caractere e frequência
+        if (root->character >= 32 && root->character <= 126) {
+            // Imprime caractere visível
+            printf("'%c' (%d)\n", root->character, root->frequency);
+        } else {
+            // Imprime valor numérico do caractere
+            printf("0x%02X (%d)\n", root->character, root->frequency);
+        }
+    } else {
+        // Nó interno: só imprime frequência
+        printf("* (%d)\n", root->frequency);
+    }
+
+    print_huffman_tree(root->left, level + 1);
+}
+
 
 #endif // HUFFMAN_H

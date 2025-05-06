@@ -87,9 +87,12 @@ void heapify_down(PRIORITY_QUEUE* pq, int idx) {
     }
 }
 
-void insert(PRIORITY_QUEUE* pq, unsigned char c, int freq) {
-    NODE* node = create_node(c, freq, NULL, NULL);
-    pq->data[pq->size] = node;
+void insert(PRIORITY_QUEUE* pq, NODE* node) {
+    if (pq->size >= MAX_HEAP) {
+        fprintf(stderr, "Error: Priority queue is full. Cannot insert new element.\n");
+        return;
+    }
+    pq->data[pq->size] = node; // Directly store the node
     heapify_up(pq, pq->size);
     pq->size++;
 }
@@ -120,6 +123,15 @@ void print_priority_queue(PRIORITY_QUEUE* pq) {
             printf("'\\x%02x' (%d): freq = %d\n", (unsigned char)current->character, current->character, current->frequency);
         }
     }
+}
+
+void free_priority_queue(PRIORITY_QUEUE* pq) {
+    if (pq == NULL) return;
+
+    for (int i = 0; i < pq->size; i++) {
+        free_huffman_tree(pq->data[i]); // Free each node in the queue
+    }
+    free(pq); // Free the priority queue itself
 }
 
 

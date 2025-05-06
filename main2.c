@@ -40,30 +40,32 @@ int main() {
     NODE* root = build_huffman_tree(huff_queue1);
 
     // Cria a tabela de códigos de Huffman
-    char* huff_table[256] = { NULL };
-    char path[256];
-    create_huffman_table(root, path, 0, huff_table);
+    HuffmanCode huff_table[256] = {0}; // Initialize the Huffman table
+    uint32_t code = 0; // Initialize code as an integer
+    create_huffman_table(root, code, 0, huff_table); // Pass code as a pointer
 
     // Escreve o cabeçalho e a árvore no novo arquivo
     write_header(huff_queue2, huff_table, new_file, root);
+
+    
+    free_huffman_tree(root);
+    free_priority_queue(huff_queue1);
+    free_priority_queue(huff_queue2);
+
 
     // Reposiciona o ponteiro do arquivo original para o início
     rewind(original_file);
 
     // Compacta os dados do arquivo original usando a tabela de Huffman
-    //compactor(original_file, new_file, huff_table);
+    compactor(original_file, new_file, huff_table);
 
     // Fecha os arquivos
     fclose(original_file);
     fclose(new_file);
 
-    // Libera a memória da tabela de Huffman
-    for (int i = 0; i < 256; i++) {
-        if (huff_table[i]) {
-            free(huff_table[i]);
-        }
-    }
+
 
     printf("Arquivo compactado com sucesso: %s\n", new_file_name);
     return 0;
+
 }
