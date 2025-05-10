@@ -8,9 +8,6 @@
 
 #define BUFFER_SIZE 1000
 
-// Protótipo da função de descompactação (a ser implementada futuramente)
-void decompressor(const char* compressed_filename);
-
 int main() {
     int option;
     
